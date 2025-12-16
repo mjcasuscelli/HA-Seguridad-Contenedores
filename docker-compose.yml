@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  database:
+    image: mjcasuscelli/db:1.0.2
+    container_name: app-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=appuser
+      - POSTGRES_PASSWORD=SuperSecretPassword123!
+      - POSTGRES_DB=myappdb
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # Solo lectura + tmpfs - para que pueda escribir.
+    read_only: true
+    tmpfs:
+      - /var/run/postgresql:rw,noexec,nosuid,size=128m
+      - /tmp:rw,noexec,nosuid,size=128m
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d myappdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: mjcasuscelli/api:1.0.2
+    container_name: app-api
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      - DB_HOST=database
+      - DB_USER=appuser
+      - DB_PASS=SuperSecretPassword123!
+    ports:
+      - "8081:8080"
+    # SEGURIDAD
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    networks:
+      - backend-net
+      - frontend-net
+
+  frontend:
+    image: mjcasuscelli/frontend:1.0.2
+    container_name: app-frontend
+    restart: unless-stopped
+    ports:
+      - "80:8080"
+    # SEGURIDAD
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /var/cache/nginx:rw,noexec,nosuid,size=128m
+      - /var/run:rw,noexec,nosuid,size=128m
+    networks:
+      - frontend-net
+
+volumes:
+  db_data:
+
+networks:
+  frontend-net:
+    driver: bridge
+  backend-net:
+    driver: bridge
+    internal: true
